@@ -45,6 +45,11 @@ Ensure you have **ComfyUI** installed and configured.
 |--------|------|-------------|
 | `caption` | STRING | Generated image caption |
 
+### Example Workflow
+
+![Example Workflow](https://github.com/ComfyUI-MiniCPM-Captioning/ComfyUI-MiniCPM-Captioning/blob/main/Screenshot_2023-09-17_19-31-35.png)
+
+
 ## Model Details
 - **Model Used:** `MiniCPM-o-2_6-nf4`
 - **Source:** [Hugging Face](https://huggingface.co/2dameneko/MiniCPM-o-2_6-nf4)
