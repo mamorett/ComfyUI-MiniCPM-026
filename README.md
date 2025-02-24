@@ -47,7 +47,7 @@ Ensure you have **ComfyUI** installed and configured.
 
 ### Example Workflow
 
-![Example Workflow](https://github.com/ComfyUI-MiniCPM-Captioning/ComfyUI-MiniCPM-Captioning/blob/main/Screenshot_2023-09-17_19-31-35.png)
+![Example Workflow](./Screenshot_20250224_134926.png)
 
 
 ## Model Details
