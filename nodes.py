@@ -5,7 +5,6 @@ from PIL import Image
 from transformers import AutoModel, AutoTokenizer
 import folder_paths
 import comfy.model_management as mm
-from comfy.utils import ProgressBar
 
 class ImageCaptioningNode:
     def __init__(self):
@@ -16,13 +15,13 @@ class ImageCaptioningNode:
         self.model_dir = os.path.join(folder_paths.models_dir, "minicpm")
         os.makedirs(self.model_dir, exist_ok=True)
         folder_paths.folder_names_and_paths["minicpm"] = ([self.model_dir], folder_paths.supported_pt_extensions)
-        
+    
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "prompt": ("STRING", {"default": "What do you see in this image?"})
+                "prompt": ("STRING", {"default": "What do you see in this image? Describe the image accurately."})
             }
         }
     
@@ -32,10 +31,10 @@ class ImageCaptioningNode:
 
     def load_model(self):
         if self.model is None:
+            print("Loading model...")
             model_path = "2dameneko/MiniCPM-o-2_6-nf4"
             device = "cuda" if torch.cuda.is_available() else "cpu"
             
-            # Download and load using ComfyUI's model directory
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_path, 
                 trust_remote_code=True,
@@ -59,17 +58,44 @@ class ImageCaptioningNode:
             self.model.eval()
             self.model.init_tts()
             self.model.tts.float()
+            print("Model loaded successfully.")
+        else:
+            print("Model already loaded.")
 
     def generate_caption(self, image, prompt):
-        # Load model if not already loaded
         self.load_model()
         
-        # Convert numpy array to PIL Image
+        # Debug: Check input image type
+        print(f"Received image type: {type(image)}")
+        
+        if isinstance(image, torch.Tensor):
+            image = image.cpu().numpy()
+        
         if isinstance(image, np.ndarray):
-            image = Image.fromarray(np.clip(image * 255, 0, 255).astype(np.uint8)).convert('RGB')
+            print(f"Original image shape: {image.shape}")
+            
+            # Ensure image is in (H, W, C) format
+            if image.ndim == 4:
+                image = image.squeeze(0)  # Remove batch dimension if exists
+            if image.ndim == 3 and image.shape[0] in [1, 3]:
+                image = np.transpose(image, (1, 2, 0))  # Convert (C, H, W) to (H, W, C)
+            
+            if image.dtype != np.uint8:
+                image = np.clip(image * 255, 0, 255).astype(np.uint8)
+            
+            image = Image.fromarray(image).convert('RGB')
+        elif isinstance(image, Image.Image):
+            print("Image is already a PIL Image.")
+        else:
+            raise ValueError(f"Unsupported image format: {type(image)}")
+        
+        # Construct full prompt
+        system_prompt = "Describe the image accurately."
+        full_prompt = f"{system_prompt} {prompt}"
+        print(f"Using prompt: {full_prompt}")
         
         # Prepare the message
-        msgs = [{'role': 'user', 'content': [image, prompt]}]
+        msgs = [{'role': 'user', 'content': [image, full_prompt]}]
         
         # Generate caption
         caption = self.model.chat(
@@ -78,6 +104,7 @@ class ImageCaptioningNode:
             tokenizer=self.tokenizer
         )
         
+        print(f"Generated Caption: {caption}")
         return (caption,)
 
 NODE_CLASS_MAPPINGS = {
