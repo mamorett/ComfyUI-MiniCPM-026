@@ -89,13 +89,11 @@ class ImageCaptioningNode:
         else:
             raise ValueError(f"Unsupported image format: {type(image)}")
         
-        # Construct full prompt
-        system_prompt = "Describe the image accurately."
-        full_prompt = f"{system_prompt} {prompt}"
-        print(f"Using prompt: {full_prompt}")
+        # Use the provided prompt directly without combining with system prompt
+        print(f"Using prompt: {prompt}")
         
-        # Prepare the message
-        msgs = [{'role': 'user', 'content': [image, full_prompt]}]
+        # Prepare the message with only the custom prompt
+        msgs = [{'role': 'user', 'content': [image, prompt]}]
         
         # Generate caption
         caption = self.model.chat(
@@ -106,6 +104,7 @@ class ImageCaptioningNode:
         
         print(f"Generated Caption: {caption}")
         return (caption,)
+
 
 NODE_CLASS_MAPPINGS = {
     "ImageCaptioning": ImageCaptioningNode
