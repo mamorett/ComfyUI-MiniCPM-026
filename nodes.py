@@ -23,7 +23,7 @@ class ImageCaptioningNode:
             "required": {
                 "image": ("IMAGE",),
                 "prompt": ("STRING", {"default": "What do you see in this image? Describe the image accurately."}),
-                "unload_after_generation": ("BOOLEAN", {"default": True}),
+                "unload_after_generation": ("BOOLEAN", {"default": True})
             }
         }
     
@@ -35,10 +35,10 @@ class ImageCaptioningNode:
         if self.model is None:
             print("Loading model...")
             model_path = "2dameneko/MiniCPM-o-2_6-nf4"
+            device = "cuda" if torch.cuda.is_available() else "cpu"
             
-            # Use ComfyUI's model management for device selection
-            device = mm.get_torch_device()
-            dtype = torch.bfloat16 if mm.should_use_bf16() else torch.float16
+            # Free VRAM before loading model
+            mm.soft_empty_cache()
             
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_path, 
@@ -47,8 +47,8 @@ class ImageCaptioningNode:
                 cache_dir=self.model_dir
             )
             
-            # Free VRAM before loading model
-            mm.soft_empty_cache()
+            # Use the appropriate dtype based on hardware capability
+            dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
             
             self.model = AutoModel.from_pretrained(
                 model_path,
@@ -73,13 +73,15 @@ class ImageCaptioningNode:
         if self.model is not None:
             del self.model
             self.model = None
-            # Force CUDA memory cleanup
+            if hasattr(self, 'tokenizer'):
+                del self.tokenizer
+                self.tokenizer = None
             torch.cuda.empty_cache()
             gc.collect()
             print("Model unloaded to free memory.")
 
     def generate_caption(self, image, prompt, unload_after_generation=True):
-        # Load model with memory management
+        # Unload other models to free VRAM
         mm.unload_all_models()
         self.load_model()
         
@@ -88,9 +90,8 @@ class ImageCaptioningNode:
             print(f"Received image type: {type(image)}")
             
             if isinstance(image, torch.Tensor):
-                # Convert to model's precision to save VRAM during processing
-                dtype = self.model.dtype
-                image = image.to(dtype=dtype).cpu().numpy()
+                # Convert to numpy safely
+                image = image.cpu().numpy()
             
             if isinstance(image, np.ndarray):
                 print(f"Original image shape: {image.shape}")
@@ -116,6 +117,7 @@ class ImageCaptioningNode:
             # Prepare the message with only the custom prompt
             msgs = [{'role': 'user', 'content': [image, prompt]}]
             
+            # Use inference mode to reduce memory usage
             with torch.inference_mode():
                 # Generate caption
                 caption = self.model.chat(
@@ -126,7 +128,7 @@ class ImageCaptioningNode:
             
             print(f"Generated Caption: {caption}")
             return (caption,)
-            
+        
         finally:
             # Unload model if requested to free memory
             if unload_after_generation:
