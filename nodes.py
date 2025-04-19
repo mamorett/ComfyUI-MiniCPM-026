@@ -6,6 +6,69 @@ from transformers import AutoModel, AutoTokenizer
 import folder_paths
 import comfy.model_management as mm
 import gc
+import math
+
+class FluxResolutionNode:
+    def __init__(self):
+        self.add_input('image', 'Image', 'Input image for resolution calculation')
+        self.add_input('megapixel', 'Megapixel', 1.0, optional=True)
+        self.add_output('width', 'Width', 0)
+        self.add_output('height', 'Height', 0)
+        
+        # Predefined FLUX resolution standards (add more as needed)
+        self.flux_resolutions = [
+            (1024, 768),   # 4:3
+            (1280, 720),   # 16:9
+            (1920, 1080),  # 16:9
+            (2048, 1536),  # 4:3
+            (2560, 1440),  # 16:9
+            (3840, 2160),  # 16:9 (4K)
+            (4096, 3072),  # 4:3
+        ]
+
+    def compute(self):
+        image = self.get_input('image')
+        if not image:
+            raise ValueError("Input image is required")
+        
+        megapixel = self.get_input('megapixel', default=1.0)
+        target_area = megapixel * 1e6
+        
+        original_width = image.width
+        original_height = image.height
+        original_ratio = original_width / original_height
+        
+        # Filter FLUX resolutions with closest aspect ratio
+        closest_ratio = None
+        valid_resolutions = []
+        for w, h in self.flux_resolutions:
+            ratio = w / h
+            if closest_ratio is None or abs(ratio - original_ratio) < abs(closest_ratio - original_ratio):
+                closest_ratio = ratio
+                valid_resolutions = [(w, h)]
+            elif abs(ratio - original_ratio) == abs(closest_ratio - original_ratio):
+                valid_resolutions.append((w, h))
+        
+        # Find best resolution matching target area
+        best_resolution = None
+        min_diff = float('inf')
+        for w, h in valid_resolutions:
+            area = w * h
+            diff = abs(area - target_area)
+            if diff < min_diff:
+                min_diff = diff
+                best_resolution = (w, h)
+        
+        if not best_resolution:
+            # Fallback to original scaling if no FLUX resolution matches
+            scaling_factor = math.sqrt(target_area / (original_width * original_height))
+            new_width = max(1, round(original_width * scaling_factor))
+            new_height = max(1, round(original_height * scaling_factor))
+            best_resolution = (new_width, new_height)
+        
+        self.set_output('width', best_resolution[0])
+        self.set_output('height', best_resolution[1])
+
 
 class ImageCaptioningNode:
     def __init__(self):
